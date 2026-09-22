@@ -1,0 +1,184 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    /* Competitor Freight Color Palette (Flexport / Freightos / Cogoport Inspired) */
+    --cs-navy:        #0B192C;
+    --cs-navy-dark:   #060D1A;
+    --cs-navy-light:  #1E3E62;
+    --cs-blue:        #0284C7;
+    --cs-blue-vivid:  #2563EB;
+    --cs-cyan:        #00ADB5;
+    
+    /* Surface Colors */
+    --cs-bg:          #070F1B;
+    --cs-bg-card:     #0F172A;
+    --cs-bg-elevated: #1E293B;
+    --cs-text:        #F8FAFC;
+    --cs-text-muted:  #94A3B8;
+    --cs-border:      rgba(2, 132, 199, 0.2);
+
+    /* Status Colors */
+    --cs-success:     #10B981;
+    --cs-warning:     #F59E0B;
+    --cs-error:       #EF4444;
+
+    /* Glows */
+    --glow-blue: 0 0 25px rgba(2, 132, 199, 0.35);
+    --glow-cyan: 0 0 25px rgba(0, 173, 181, 0.35);
+  }
+
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--cs-bg);
+    color: var(--cs-text);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+/* ===== MODERN FREIGHT GLASSMORPHISM PANELS ===== */
+.glass-panel {
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(2, 132, 199, 0.2);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.glass-card {
+  background: rgba(30, 41, 59, 0.7);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(2, 132, 199, 0.15);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-card:hover {
+  border-color: rgba(2, 132, 199, 0.45);
+  box-shadow: 0 8px 30px rgba(2, 132, 199, 0.2);
+  transform: translateY(-2px);
+}
+
+/* ===== BRAND BUTTON GRADIENTS ===== */
+.btn-primary {
+  background: linear-gradient(135deg, #0284C7 0%, #2563EB 100%);
+  color: #ffffff;
+  font-weight: 700;
+  box-shadow: 0 4px 20px rgba(2, 132, 199, 0.4);
+  transition: all 0.2s ease;
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, #0369A1 0%, #1D4ED8 100%);
+  box-shadow: 0 6px 25px rgba(2, 132, 199, 0.6);
+  transform: translateY(-1px);
+}
+
+.glow-cyan {
+  box-shadow: 0 0 20px rgba(0, 173, 181, 0.4);
+}
+
+.glow-blue {
+  box-shadow: 0 0 20px rgba(2, 132, 199, 0.4);
+}
+
+/* ===== DYNAMIC MOVING BACKGROUND ANIMATIONS ===== */
+@keyframes float-blob-1 {
+  0%, 100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  33% {
+    transform: translate(80px, -100px) scale(1.25);
+  }
+  66% {
+    transform: translate(-70px, 60px) scale(0.85);
+  }
+}
+
+@keyframes float-blob-2 {
+  0%, 100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  33% {
+    transform: translate(-90px, 80px) scale(1.2);
+  }
+  66% {
+    transform: translate(60px, -70px) scale(0.9);
+  }
+}
+
+@keyframes float-blob-3 {
+  0%, 100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  50% {
+    transform: translate(70px, 70px) scale(1.35);
+  }
+}
+
+@keyframes grid-move {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 60px 60px;
+  }
+}
+
+.animate-blob-1 {
+  animation: float-blob-1 18s ease-in-out infinite;
+}
+
+.animate-blob-2 {
+  animation: float-blob-2 22s ease-in-out infinite;
+}
+
+.animate-blob-3 {
+  animation: float-blob-3 15s ease-in-out infinite;
+}
+
+.moving-grid-bg {
+  background-size: 45px 45px;
+  background-image: 
+    linear-gradient(to right, rgba(2, 132, 199, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(2, 132, 199, 0.04) 1px, transparent 1px);
+  animation: grid-move 25s linear infinite;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #070F1B;
+}
+::-webkit-scrollbar-thumb {
+  background: #1E293B;
+  border-radius: 9999px;
+  border: 1px solid rgba(2, 132, 199, 0.2);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #0284C7;
+}

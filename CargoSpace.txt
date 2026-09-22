@@ -1,0 +1,1528 @@
+Build this as a verified freight-consolidation platform, not a marketplace that sells a container's “unused CBM.” The difficult parts are proving that cargo can actually be accepted, maintaining trustworthy capacity, preventing conflicting bookings, and coordinating the warehouse, documents, payment, and shipment.
+
+My recommended foundation is Next.js + TypeScript, NestJS, PostgreSQL/PostGIS, Redis/BullMQ, and a separate Python optimization service, delivered first as a multilingual progressive web app.
+
+Two boundaries matter before the specification:
+
+• Your deadline, team, budget, and intended launch corridor are not filled in. The plan below assumes four developers, a 12-week academic/prototype build, and a subsequent controlled commercial pilot. It is not a promise of a fully operational national logistics business in 12 weeks.
+• Research verification is partial. The search retrieved useful logistics-policy and container-loading sources, but did not establish reliable current Indian LCL market sizing, every competitor's capabilities, current service quotas, or every regulatory/API condition. Those items are explicitly marked for verification rather than presented as facts.
+
+This is the project report, engineering specification, build guide, and research-paper draft in one structured package.
+
+Project definition and feasibility
+1.1 Working identity
+
+Working name: CargoSpace
+
+Descriptive title: Verified, Constraint-Aware Shared Freight Booking for Small Exporters.
+
+Before commercial use, check trademark and domain availability. The name here is only a project label.
+
+1.2 Refined abstract
+
+Small exporters often depend on fragmented communication with logistics providers to identify suitable less-than-container-load capacity, compare charges, and coordinate cargo acceptance. A quoted volume alone does not establish booking feasibility because shipment suitability also depends on routing, cargo readiness, dimensional fit, weight, stackability, handling restrictions, documentation, and consolidation deadlines.
+
+CargoSpace is a proposed digital platform connecting self-registered traders with inspection-approved logistics service providers. Providers publish time-bound consolidation capacity, while traders search by pickup location, destination, cargo characteristics, and readiness date. A matching service filters operationally incompatible options and evaluates packing feasibility when sufficiently detailed load information is available. Transactional capacity holds, payment reconciliation, role-based communication, and milestone tracking support reliable booking execution.
+
+The platform distinguishes advertised capacity from warehouse-confirmed acceptance, records inventory freshness, and preserves an auditable history of provider approval, booking, payment, and shipment events. Its research component evaluates whether uncertainty-aware, constraint-based matching reduces infeasible booking recommendations compared with volume-only allocation.
+
+1.3 What is realistic?
+
+| Delivery stage | Realistic outcome |
+|---|---|
+| 12-week student build | Working demonstration with sandbox payments, simulated tracking, onboarding, bookings, and packing experiments |
+| Controlled commercial pilot | One corridor, a few contracted LSPs, actual inspections, paid infrastructure, support and reconciliation |
+| National multimodal platform | Separate long-term program involving partnerships, operational staff, legal review, integrations, and substantial funding |
+
+An all-mode, all-cargo, nationwide marketplace with live government APIs, automated KYC, escrow, guaranteed packing, and zero operating budget is not a realistic first release.
+
+1.4 Objectives
+Discover suitable capacity: Match origin, destination, readiness, deadlines, cargo restrictions, and handling requirements.
+Improve booking reliability: Prevent platform overselling and expose stale or uncertain inventory.
+Establish provider trust: Require evidence-based inspection approval before publishing bookable services.
+Support execution: Connect quotes, bookings, payments, documents, chat, and shipment events.
+Test a research hypothesis: Compare constraint-aware matching against simpler allocation strategies.
+Improve accessibility: Support regional-language workflows and assisted booking.
+
+1.5 Scope boundaries
+
+First commercial pilot:
+
+• One origin cluster and one consolidation corridor.
+• Ambient, non-hazardous, packaged general cargo.
+• Road pickup to a consolidation hub, followed by one ocean LCL service.
+• Manually maintained schedules with controlled API/import adapters.
+• Warehouse acceptance and measured dimensions as operational checkpoints.
+• Gateway-supported payment collection and provider settlement.
+• Milestone tracking rather than invented end-to-end live GPS.
+
+Out of scope initially:
+
+• Dangerous goods, refrigerated cargo, live animals, and high-value controlled commodities.
+• Automated customs filing.
+• Owning or operating ships, trucks, warehouses, or containers.
+• Autonomous packing certification.
+• Unlicensed insurance distribution.
+• Self-operated escrow, lending, or wallet balances.
+• Guaranteed vessel departure, arrival, or customs clearance.
+• Full multimodal optimization.
+
+The data model can accommodate road, rail, sea, and air providers, but each mode needs its own operational and pricing rules.
+
+Domain research and market framing
+2.1 How LCL really works
+
+Less-than-container-load freight consolidates consignments from multiple shippers into a shared ocean container. Exporters generally buy a forwarding/consolidation service, not ownership of a particular geometric cavity.
+
+A realistic journey is:
+
+Trader submits dimensions, weight, commodity, readiness, and destination.
+Provider quotes freight plus applicable origin, destination, and additional charges.
+Cargo is collected or delivered to a designated facility.
+The warehouse measures, weighs, and checks cargo and documentation.
+The consolidator plans loading and completes operational requirements.
+Cargo is stuffed, sealed, transported, and handed across the booked service.
+Destination deconsolidation and delivery follow the contractual scope.
+
+Important product correction: A physical container number may not exist when a trader books. Support a planned consolidation departure, with the container assignment added later.
+
+The requirement to show space container-wise can therefore display:
+
+• Confirmed container assignments.
+• Planned consolidation units clearly labelled as not yet assigned.
+• Provider-declared versus packing-checked capacity.
+• Last inventory update and booking cutoff.
+
+Never fabricate a container identifier to make the interface look complete.
+
+2.2 CBM, chargeable weight, and quotations
+
+For identical rectangular packages:
+
+$$
+V{\text{m}^3}
+=
+n \times L{\text{m}} \times W{\text{m}} \times H{\text{m}}
+$$
+
+If ten cartons measure 0.6 m × 0.4 m × 0.5 m, their total geometric volume is 1.2 m³.
+
+Geometric volume is not the entire price. Ocean LCL tariffs commonly use weight-or-measure conventions, while road and air services may use different dimensional-weight factors, rounding, and minimum charges. Store these as tariff rules rather than hard-coding a universal divisor.
+
+A configurable weight-or-measure calculation is:
+
+$$
+Q{\text{billable}}
+=
+\max
+\left(
+\frac{V}{V{\text{unit}}},
+\frac{M}{M{\text{unit}}}
+\right)
+$$
+
+Apply the provider's agreed minimums, rounding, unit price, and surcharge rules afterward.
+
+Every quote should identify:
+
+• Service scope: Pickup, CFS handling, freight, customs-related services, destination handling, or delivery.
+• Basis: Dimensions and weights declared by the trader or measured by the warehouse.
+• Included charges: Separately itemized.
+• Excluded or conditional charges: Explicitly disclosed.
+• Validity: Expiration, cutoff, and applicable departure.
+• Adjustment policy: What happens if actual cargo differs from the declaration.
+
+Do not describe a booking as all-inclusive when destination charges remain unknown.
+
+2.3 Operational constraints
+
+| Constraint | Required representation |
+|---|---|
+| Cargo-ready date | Earliest collection or acceptance time |
+| Warehouse cutoff | Latest arrival for the consolidation |
+| Documentation cutoff | Separate deadline from physical cargo |
+| Stuffing window | Facility-specific start and end |
+| Departure schedule | Planned and actual times |
+| Payload | Remaining allowable cargo mass |
+| Package access | Door dimensions and handling access |
+| Stackability | Allowed support and top-load limits |
+| Compatibility | Restricted combinations and segregations |
+| Multi-stop unloading | Access order and rehandling constraints |
+| Temperature | Required range and supported equipment |
+| Inventory freshness | Source, timestamp, and expiry policy |
+
+VGM is not the same as remaining payload. Keep container tare, cargo mass, packaging/dunnage where relevant, and verified gross mass records distinct. Road axle compliance requires vehicle and load-position information; a container-level weight check alone cannot establish it.
+
+Operational and legal implementation of these requirements needs confirmation from the contracted consolidator and qualified shipping/compliance personnel.
+
+2.4 Hub model versus milk run
+
+Start with a hub model. Traders deliver cargo to a designated facility, or the provider arranges a separately priced pickup.
+
+A milk run adds a collection-routing problem with:
+
+• Pickup windows.
+• Vehicle capacity.
+• Travel-time uncertainty.
+• Driver and vehicle availability.
+• Loading order.
+• Missed-pickup handling.
+
+Treat milk-run optimization as a later module, not a prerequisite for booking shared freight.
+
+2.5 Market size: what can be said honestly
+
+A defensible current India-only LCL market value was not established by this research. Total logistics expenditure, total freight forwarding revenue, container throughput, and LCL platform revenue are different quantities and must not be substituted for one another.
+
+An accessible commercial report describes the global LCL freight-forwarding segment, but its public material does not establish an independently verified Indian market size suitable for your investment case. Dataintelo
+
+Use a bottom-up pilot model instead:
+
+$$
+\text{Annual addressable freight spend}
+=
+N{\text{eligible exporters}}
+\times
+B{\text{annual bookings}}
+\times
+P{\text{average booking}}
+$$
+
+$$
+\text{Potential platform revenue}
+=
+\text{captured freight spend}
+\times
+\text{effective commission rate}
+$$
+
+For an illustrative assumption, not a market finding:
+
+• 200 reachable exporters.
+• 12 qualifying bookings per exporter per year.
+• ₹20,000 average booking value.
+
+That represents ₹4.8 crore annual booking value. At an illustrative 5% commission, revenue would be ₹24 lakh before support, acquisition, payment, refunds, and operating costs.
+
+Validate every assumption through interviews and actual pilot transactions.
+
+2.6 Competitor landscape
+
+The following are benchmark candidates, not a verified current feature audit:
+
+| Segment | Examples to investigate | Questions to test |
+|---|---|---|
+| Consolidators and forwarding networks | ECU Worldwide, Allcargo, DHL Global Forwarding | Which corridors, warehouse services, and SME booking capabilities are available? |
+| Digital freight platforms | Cogoport, Freightos, Flexport | How are quotes, charges, shipment visibility, and operational acceptance handled? |
+| Domestic groupage and trucking | BlackBuck, Vahak, regional PTL operators | How transferable is their discovery and supply-onboarding model to export consolidation? |
+| Local execution network | Freight forwarders, customs brokers, CFS/ICD-linked operators | How much inventory and quoting still depend on phone, email, and spreadsheets? |
+
+Do not claim these businesses lack 3D packing, transparency, or inspection simply because their public website does not show the feature.
+
+Your competitive hypotheses should be tested through demos and interviews:
+
+• Small exporters may struggle to compare the complete payable amount.
+• A listed CBM quantity may not imply physical or operational acceptance.
+• Inventory may be updated too slowly for dependable instant booking.
+• Regional-language users may need assisted workflows.
+• Provider reliability may be poorly explained to new traders.
+
+The opportunity is to prove a narrower service works better, not to assert that established providers have no technology.
+
+2.7 Indian integration landscape
+
+ULIP is a genuine integration opportunity, but it is not an unrestricted public API. The published onboarding process includes a use-case review, NDA, security checks, and integration testing. PIB
+
+A March 2025 government release reported that ULIP connected 43 systems across 11 ministries through 129 APIs. These are dated ecosystem figures, not a guarantee that any particular dataset is available to this project. PIB
+
+| Integration | Potential use | MVP decision |
+|---|---|---|
+| ULIP/NLDSL | Authorized transport and logistics data | Adapter interface; apply after defining the corridor |
+| ONDC logistics | Network participation and logistics interoperability | Evaluate separately; do not assume LCL fit |
+| ICEGATE | Customs-related workflows and references | Store authorized document/status references initially |
+| GSTN/GSP ecosystem | Tax identity and permitted tax workflows | Manual verification or contracted authorized provider |
+| NLP Marine/port community systems | Port-related operational events | Partner-led discovery before implementation |
+| FASTag/telematics | Authorized vehicle events or location | Integrate only with contractual access and lawful purpose |
+| LSP ERP/WMS | Availability and warehouse acceptance | Highest-priority commercial integration |
+
+Government APIs do not replace the warehouse's knowledge of current usable capacity.
+
+Literature survey and research contribution
+3.1 Literature foundation
+
+The most directly relevant retrieved source is Bortfeldt and Wäscher's review of constraints in container loading. It explains why mathematically efficient packing methods can have limited practical usefulness when operational constraints are omitted. RePEc
+
+| Reference | Relevance | Limitation for this project |
+|---|---|---|
+| Bortfeldt, A., and Wäscher, G. (2013). “Constraints in container loading - A state-of-the-art review.” European Journal of Operational Research, 229(1), 1-20. | Practical loading constraints and problem classification | Not an end-to-end booking marketplace |
+| Fanslau, T., and Bortfeldt, A. (2010). “A Tree Search Algorithm for Solving the Container Loading Problem.” INFORMS Journal on Computing, 22(2), 222-235. | Packing-search methods | Does not by itself solve payment, stale inventory, or onboarding |
+| Bortfeldt, A., and Gehring, H. (2001). “A hybrid genetic algorithm for the container loading problem.” European Journal of Operational Research, 131(1), 143-161. | Metaheuristic packing baseline | Requires adaptation for practical acceptance constraints |
+| Resnick, P., Zeckhauser, R., Friedman, E., and Kuwabara, K. (2000). “Reputation Systems.” Communications of the ACM, 43(12), 45-48. | Transaction feedback and marketplace reputation | Reputation is not equivalent to physical inspection |
+| Agatz, N., Erera, A., Savelsbergh, M., and Wang, X. (2012). “Optimization for dynamic ride-sharing: A review.” European Journal of Operational Research, 223(2), 295-303. | Adjacent literature on dynamic matching and timing constraints | Passenger matching is not cargo consolidation |
+
+The first three bibliographic records are supported by the retrieved review page and its reference list. The final two are established literature leads included from bibliographic knowledge; independently verify their records and obtain the papers before submission. Passenger-matching literature must not be presented as direct validation of freight matching.
+
+This is a starting literature survey, not a completed systematic review. For a publication, search and screen freight matching, vehicle routing with loading constraints, online packing, digital freight platforms, and trust under operational uncertainty.
+
+3.2 What is not novel?
+
+These are useful product features, but not standalone research contributions:
+
+• A marketplace connecting traders and transporters.
+• Login, payment, messaging, and maps.
+• A nearest-provider search.
+• Basic CBM calculation.
+• Applying an existing bin-packing heuristic.
+• A weighted provider-rating score.
+• Calling a system “AI-powered” without a tested algorithmic contribution.
+
+3.3 A defensible research direction
+
+Proposed contribution: Uncertainty-aware, constraint-based booking admission for partially observed consolidation inventory.
+
+The practical problem is that a platform may know declared remaining volume and weight but not the exact arrangement of existing cargo. New information can also arrive after a quote is generated.
+
+Study whether the system can improve decisions by combining:
+
+Operational compatibility: Route, deadlines, service scope, cargo category.
+Physical feasibility: Dimensions, support, orientation, payload, known occupied regions.
+Data confidence: Freshness, measurement source, inspection evidence, historical discrepancies.
+Transactional admission: Holds and payment-state coordination.
+Conservative handling of uncertainty: Automatic acceptance only when evidence is sufficient.
+
+Research questions
+• Does constraint-aware matching reduce infeasible recommendations relative to volume-only filtering?
+• Does accounting for stale or uncertain inventory improve reliable booking completion?
+• What is the trade-off between utilization, rejection rate, and decision latency?
+• Does confidence-aware admission help beyond hard constraints alone?
+
+Baselines and evaluation
+
+| Experiment element | Proposed design |
+|---|---|
+| Baseline A | Remaining-volume filter |
+| Baseline B | Volume, weight, route, and time constraints |
+| Baseline C | Deterministic 3D packing with known geometry |
+| Proposed method | Constraint-aware packing plus uncertainty-aware admission |
+| Ablation 1 | Remove freshness handling |
+| Ablation 2 | Remove confidence-based manual review |
+| Stress tests | Stale inventory, inconsistent dimensions, concurrent checkout, missing load geometry |
+
+Measure:
+
+• False-feasible recommendation rate.
+• False-rejection rate.
+• Accepted and realized utilization.
+• Computation time, especially p95.
+• Booking completion and cancellation.
+• Inventory conflicts.
+• Review workload.
+• Disparities in outcomes between new and established providers.
+
+Do not invent experimental improvements. Synthetic datasets can establish algorithmic behavior; they cannot prove real-world business performance.
+
+Software requirements specification
+4.1 Actors and permissions
+
+Use organization membership plus scoped roles, not one permanent role field on the user.
+
+| Role | Main permissions |
+|---|---|
+| Trader | Manage own cargo, search, book, pay, message, upload documents, track |
+| LSP | Apply, manage approved services, publish capacity, quote, accept, update milestones |
+| Inspector | Review assigned applications, inspections, evidence, and reinspection findings |
+| Admin | Approve/suspend providers, manage policies, disputes, access, and audit review |
+
+A trader can self-register without inspection. Operational documents may still be required for a particular shipment or by a payment/logistics partner.
+
+Admin is not an unlimited bypass. Separate refund authorization, provider approval, and sensitive-data access where practical.
+
+4.2 Functional requirements and acceptance criteria
+
+| ID | Requirement | Acceptance criterion |
+|---|---|---|
+| FR-01 | Trader self-registration | Trader account can search without inspection approval |
+| FR-02 | LSP application | Application captures service scope, facilities, contacts, and evidence |
+| FR-03 | Inspection-gated approval | LSP cannot publish bookable listings until approved |
+| FR-04 | Scoped approval | Approval covers specified facilities/modes/services, not every future operation |
+| FR-05 | Inventory listing | Stores capacity, departure, cutoffs, constraints, provenance, freshness |
+| FR-06 | Registered-user visibility | Traders and LSPs can view availability without seeing private competing cargo data |
+| FR-07 | Cargo declaration | Missing/invalid dimensions, weight, units, or package counts are rejected |
+| FR-08 | Search and matching | Incompatible routes, deadlines, and cargo classes are excluded |
+| FR-09 | Quote transparency | Quote stores line items, exclusions, validity, and measurement basis |
+| FR-10 | Capacity hold | Concurrent checkout cannot exceed supported capacity |
+| FR-11 | Booking | Trader can reserve an eligible service through the interface |
+| FR-12 | Payment | Booking becomes paid only after server-side verification |
+| FR-13 | Idempotency | Repeated payment events produce one financial effect |
+| FR-14 | Chat | Only authorized booking/conversation participants can read messages |
+| FR-15 | Tracking | Events show source, event time, receipt time, and status |
+| FR-16 | Documents | Access is scoped to shipment participants and authorized staff |
+| FR-17 | Cancellation/refund | Policy and financial effects are versioned and auditable |
+| FR-18 | Suspension | New listings/bookings are blocked; existing bookings enter a managed resolution process |
+| FR-19 | Reinspection | Expired or adverse inspection status can trigger review or restrictions |
+| FR-20 | Audit history | Privileged and financially meaningful actions are attributable |
+
+4.3 Non-functional targets
+
+These are initial engineering targets, to be tested rather than advertised as achieved.
+
+| Area | Target |
+|---|---|
+| Search performance | p95 under 2 seconds on the agreed benchmark workload |
+| Availability | 99.5% monthly pilot target, with defined exclusions |
+| Capacity integrity | No platform-caused confirmed overbooking in concurrency tests |
+| Recovery | Proposed paid-pilot RPO ≤15 minutes and RTO ≤4 hours |
+| Accessibility | WCAG 2.2 AA-oriented implementation and manual testing |
+| Security | No unresolved critical launch-blocking findings |
+| Internationalization | English plus one pilot-region language |
+| Traceability | Request, booking, payment, and job correlation identifiers |
+| Offline behavior | Drafts and queued events supported; payment/booking confirmation requires connectivity |
+| Maintainability | Automated tests around all financial and inventory transitions |
+
+4.4 State machines
+
+Provider:
+
+DRAFT -> SUBMITTED -> UNDERREVIEW -> INSPECTIONSCHEDULED -> INSPECTED -> APPROVED
+
+Alternative outcomes:
+
+NEEDSCHANGES, REJECTED, SUSPENDED, REINSPECTIONDUE.
+
+Booking:
+
+DRAFT -> QUOTED -> HELD -> PAYMENTPENDING -> CONFIRMED -> RECEIVED -> ACCEPTEDFORLOADING -> STUFFED -> DEPARTED -> ARRIVED -> DELIVERED
+
+Exception states:
+
+HOLDEXPIRED, PAYMENTEXCEPTION, REJECTEDATACCEPTANCE, CANCELLED, DISPUTED.
+
+Keep payment, settlement, and shipment states separate. A shipment can be cancelled while its refund is still pending.
+
+Recommended technology stack
+5.1 Primary choices
+
+Use a modular monolith for the business backend. Start with clear module boundaries and one transactional database; do not introduce a fleet of microservices to satisfy an architecture diagram.
+
+| Layer | Recommendation | Reason and alternative |
+|---|---|---|
+| Web frontend | Next.js, React, TypeScript | One application for four roles; React/Vite is simpler if server rendering is unnecessary |
+| Mobile delivery | Responsive PWA | Faster pilot delivery; Flutter or React Native later for stronger device/background capabilities |
+| Design system | Tailwind CSS plus accessible headless components | Consistent tokens with control over workflows |
+| Business API | NestJS, TypeScript | Structured modules, guards, validation, dependency injection |
+| Optimization | Python/FastAPI | Isolates packing experiments and scientific libraries |
+| Database | PostgreSQL | Transactions, constraints, relational auditability |
+| Geospatial | PostGIS | Radius, facility, corridor, and proximity queries |
+| Database access | Prisma plus reviewed SQL | Productive CRUD; SQL migrations/functions for PostGIS and locking |
+| Jobs | BullMQ with Redis | Holds cleanup, reconciliation, notifications, imports |
+| Realtime | Socket.IO or SSE | WebSocket chat; SSE may suffice for one-way status updates |
+| Search | PostgreSQL filters/full-text | Avoid separate search infrastructure until demonstrated need |
+| Maps | MapLibre GL JS | Renderer independence; tiles and geocoding are separate services |
+| Files | Private S3-compatible object storage | Evidence, documents, images, scan results |
+| Payments | Authorized gateway and approved marketplace settlement product | Do not collect and redistribute funds through an improvised wallet |
+| Push | FCM/Web Push integration | Useful for non-critical notifications |
+| Email/SMS | Provider adapters | Replaceable channels and delivery tracking |
+| Packaging | Docker | Reproducible development and deployment |
+| CI/CD | GitHub Actions or equivalent | Tests, builds, controlled deployment |
+| Observability | OpenTelemetry, structured logs, error tracking | Correlate bookings, jobs, payments, and failures |
+
+Version policy: Choose currently supported stable/LTS releases during setup, record them in an architecture decision, and pin lockfiles. Exact current release numbers were not verified in this research.
+
+5.2 Why not the obvious alternatives?
+
+Firebase-only: Quick for authentication and basic messaging, but relational quotes, invoices, inspections, and concurrent inventory admission are more naturally expressed in PostgreSQL.
+
+MongoDB-first: Possible, but offers little advantage for a strongly relational financial and operational workflow.
+
+Django instead of NestJS: A strong alternative if the team is Python-heavy. Django, PostgreSQL/PostGIS, Celery, Redis, and a React frontend can implement the same architecture.
+
+Kubernetes: Unnecessary for the pilot. It increases operational work without proving business value.
+
+Blockchain: Not required. It does not establish whether a provider's declared physical capacity is true.
+
+Elasticsearch: Add only after PostgreSQL search is demonstrably insufficient.
+
+Supabase: Useful as managed PostgreSQL/auth/storage infrastructure, but not a replacement for server-side booking rules and payment reconciliation.
+
+System architecture
+6.1 Context diagram
+
+``mermaid
+flowchart LR
+    T[Trader] --> P[CargoSpace]
+    L[LSP staff] --> P
+    I[Inspector] --> P
+    A[Admin] --> P
+
+    P --> G[Payment gateway]
+    P --> N[Notification providers]
+    P --> M[Maps and geocoding]
+    P --> W[LSP ERP or warehouse system]
+    P -. Approved access only .-> U[Government and logistics integrations]
+`
+
+6.2 Application-container diagram
+
+Here, “container” means an application/deployment unit, not a freight container.
+
+`mermaid
+flowchart TB
+    UI[Next.js PWA] --> API[NestJS API]
+    UI <--> RT[Realtime gateway]
+
+    API --> DB[(PostgreSQL and PostGIS)]
+    API --> R[(Redis)]
+    API --> S[Private object storage]
+    API --> O[Python optimization service]
+
+    DB --> OUT[Transactional outbox]
+    OUT --> JOB[Background workers]
+    JOB --> R
+    JOB --> PAY[Payment adapter]
+    JOB --> NOTIFY[Notification adapters]
+    JOB --> INT[Integration adapters]
+
+    RT --> API
+    PAY --> WH[Verified webhook endpoint]
+    WH --> DB
+`
+
+The database is authoritative. Realtime messages, search caches, and Redis hold timers must not become alternative sources of booking truth.
+
+6.3 Backend component diagram
+
+`mermaid
+flowchart LR
+    HTTP[API controllers] --> AUTH[Authentication and policy checks]
+    AUTH --> ID[Identity and organizations]
+    AUTH --> TRUST[Applications and inspections]
+    AUTH --> INV[Inventory and schedules]
+    AUTH --> MATCH[Search and matching]
+    AUTH --> BOOK[Quotes and bookings]
+    AUTH --> FIN[Payments and ledger]
+    AUTH --> OPS[Documents and tracking]
+    AUTH --> CHAT[Conversations]
+
+    MATCH --> PACK[Packing adapter]
+    BOOK --> INV
+    FIN --> BOOK
+
+    ID --> DATA[Repositories and transactions]
+    TRUST --> DATA
+    INV --> DATA
+    BOOK --> DATA
+    FIN --> DATA
+    OPS --> DATA
+    CHAT --> DATA
+
+    DATA --> AUDIT[Audit and outbox]
+`
+
+6.4 Main data flow
+Provider application: Evidence is uploaded to a private quarantine area.
+Trust evaluation: Inspector records findings; authorized admin approves the permitted service scope.
+Inventory ingestion: Provider enters or imports departure capacity.
+Search: PostGIS and relational filters find candidates.
+Feasibility: Optimization service evaluates detailed packages when data permits.
+Quote: API stores a price and constraint snapshot.
+Checkout: Database transaction creates a capacity hold.
+Payment: Verified gateway events update financial records and booking state.
+Execution: Warehouse acceptance and transport events update operational state.
+Settlement: Reconciliation and policy checks determine payout eligibility.
+
+6.5 Onboarding and listing sequence
+
+`mermaid
+sequenceDiagram
+    actor L as LSP
+    participant API
+    participant I as Inspector
+    participant A as Admin
+    participant DB
+
+    L->>API: Submit application and evidence
+    API->>DB: Save submitted application
+    I->>API: Record inspection findings
+    API->>DB: Save evidence and recommendation
+    A->>API: Approve permitted service scope
+    API->>DB: Activate scoped approval
+    L->>API: Publish departure and capacity
+    API->>DB: Check approval and validate listing
+    DB-->>API: Listing version saved
+    API-->>L: Published with freshness timestamp
+`
+
+6.6 Search, booking, and payment sequence
+
+`mermaid
+sequenceDiagram
+    actor T as Trader
+    participant API
+    participant O as Optimizer
+    participant DB
+    participant G as Gateway
+    participant W as Worker
+
+    T->>API: Search with route, time, packages
+    API->>DB: Fetch compatible fresh candidates
+    API->>O: Evaluate detailed feasibility
+    O-->>API: Feasible, conditional, or rejected
+    API-->>T: Options and itemized quotes
+
+    T->>API: Start checkout with idempotency key
+    API->>DB: Lock inventory and revalidate
+    API->>DB: Save hold, quote snapshot, payment intent
+    API->>G: Create gateway order
+    G-->>API: Order reference
+    API-->>T: Hosted checkout details
+
+    G->>API: Signed payment event
+    API->>DB: Deduplicate event and lock booking
+    API->>DB: Revalidate hold and record outcome
+    API-->>G: Acknowledge persisted event
+
+    W->>DB: Read outbox and payment exceptions
+    W->>G: Reconcile uncertain payment states
+    W-->>T: Send confirmed outcome
+`
+
+A late payment is an explicit exception. If the hold has expired, reacquire capacity atomically if allowed; otherwise initiate the agreed refund/review process. Do not automatically confirm a now-unavailable service.
+
+6.7 Chat and tracking sequence
+
+`mermaid
+sequenceDiagram
+    actor T as Trader
+    actor L as LSP
+    participant API
+    participant DB
+    participant RT as Realtime
+    participant N as Notifications
+
+    T->>API: Send message with client message ID
+    API->>DB: Authorize and persist once
+    API->>RT: Publish persisted message
+    RT-->>L: Deliver message
+    API->>N: Queue notification if required
+
+    L->>API: Submit milestone with event ID and event time
+    API->>DB: Authorize, deduplicate, validate transition
+    API->>DB: Store event and update derived status
+    API->>RT: Publish tracking update
+    RT-->>T: Display event and source
+`
+
+Offline device events retain both their original event time and server receipt time. An older uploaded event should not silently move a shipment backward.
+
+Database and storage design
+7.1 Entity relationship diagram
+
+`mermaid
+erDiagram
+    USER ||--o{ MEMBERSHIP : has
+    ORGANIZATION ||--o{ MEMBERSHIP : includes
+    ORGANIZATION ||--o{ PROVIDERAPPLICATION : submits
+    PROVIDERAPPLICATION ||--o{ INSPECTION : receives
+    ORGANIZATION ||--o{ FACILITY : operates
+    ORGANIZATION ||--o{ DEPARTURE : publishes
+    DEPARTURE ||--o{ CAPACITYPOOL : offers
+    CAPACITYPOOL ||--o{ LOADITEM : contains
+    ORGANIZATION ||--o{ CONSIGNMENT : owns
+    CONSIGNMENT ||--o{ PACKAGEGROUP : contains
+    CONSIGNMENT ||--o{ QUOTE : receives
+    CAPACITYPOOL ||--o{ QUOTE : supports
+    QUOTE ||--o| BOOKING : creates
+    BOOKING ||--o{ CAPACITYHOLD : reserves
+    BOOKING ||--o{ PAYMENT : records
+    PAYMENT ||--o{ REFUND : supports
+    BOOKING ||--o{ TRACKINGEVENT : tracks
+    BOOKING ||--o{ DOCUMENT : includes
+    BOOKING ||--o{ CONVERSATION : supports
+    CONVERSATION ||--o{ MESSAGE : contains
+`
+
+For multi-leg bookings, introduce a bookingallocations junction between bookings and capacity pools rather than forcing one booking into one physical container.
+
+7.2 Relational schema
+
+| Table | Important fields |
+|---|---|
+| users | id, auth subject, name, locale, account state |
+| organizations | id, legal name, organization category |
+| memberships | user, organization, role, status |
+| organizationidentifiers | type, protected value, verification source/status/time |
+| providerapplications | provider, revision, state, submitted time |
+| inspections | application, inspector, checklist version, findings, decision |
+| providerapprovals | provider, facility/mode/scope, valid period, status |
+| facilities | provider, address, point geometry, time zone, facility type |
+| departures | provider, origin, destination, mode, ETD/ETA, status |
+| departurecutoffs | departure, cutoff type, timestamp |
+| capacitypools | departure, optional container reference, limits, version, freshness |
+| loaditems | pool, dimensions, mass, position/orientation if known, provenance |
+| consignments | trader organization, commodity, readiness, handling requirements |
+| packagegroups | consignment, quantity, dimensions, mass basis, stackability |
+| tariffs | provider, service scope, calculation rule, validity, currency |
+| quotes | cargo snapshot, tariff snapshot, line items, expiry, conditions |
+| bookings | trader, accepted quote, state, idempotency key |
+| bookingallocations | booking, capacity pool, reserved units, placement version |
+| capacityholds | allocation, expiry, state, resource deltas |
+| paymentorders | booking, gateway order ID, amount, currency, state |
+| paymentevents | provider event ID, verified payload reference, processing state |
+| refunds | payment, amount, reason, state, provider reference |
+| ledgerentries | transaction, account, debit/credit, amount, currency |
+| payouts | provider organization, settlement batch, state, reference |
+| documents | owner scope, object key, hash, type, version, scan state |
+| trackingevents | booking, source, event ID, event time, received time, location |
+| conversations | booking, type |
+| conversationmembers | conversation, user, access scope |
+| messages | conversation, sender, client ID, body, attachment reference |
+| auditevents | actor, action, target, timestamp, redacted change details |
+| outboxevents | event type, entity, payload, delivery state |
+
+7.3 Database rules
+
+Store money in integer minor units, with currency. Avoid binary floating-point arithmetic for invoices and settlements.
+
+Use:
+
+• Canonical integer dimensions, such as millimetres.
+• Canonical integer mass units where practical.
+• timestamptz for event timestamps.
+• Explicit local time-zone identifiers for facility schedules.
+• Unique constraints on provider payment event IDs and scoped idempotency keys.
+• Check constraints on non-negative capacities, amounts, and package counts.
+• Foreign keys and organization-scoped access checks.
+• Version numbers for optimistic concurrency on listings and packing plans.
+
+Store a snapshot of the accepted quote and policy, not merely a link to a mutable tariff.
+
+7.4 Indexing
+
+Recommended indexes:
+
+• GiST on facility/geographic pickup points.
+• B-tree on (originfacilityid, destinationfacilityid, etd).
+• B-tree on (providerorgid, status, updatedat).
+• B-tree on (capacitypoolid, state, expiresat) for holds.
+• B-tree on (bookingid, eventtime) for tracking.
+• Unique index on (gateway, providereventid).
+• Unique index on (conversationid, senderid, clientmessageid).
+
+Proximity is only candidate generation. The nearest container is not necessarily on the correct destination corridor or reachable before cutoff.
+
+7.5 Storage and retention
+
+| Data category | Storage approach |
+|---|---|
+| Active bookings and inventory | PostgreSQL |
+| Chat metadata and message text | PostgreSQL initially |
+| Documents and inspection images | Private object storage |
+| Search results and rate-limit counters | Redis with short TTL |
+| Authoritative capacity holds | PostgreSQL, with Redis only as an acceleration layer |
+| Large event history | Partitioned PostgreSQL when volume warrants it |
+| Archived documents/events | Lower-cost object storage under retention policy |
+| Logs | Centralized, redacted, bounded retention |
+
+Retention is purpose-specific. Financial and statutory documents may require different periods from chat attachments or location data; have counsel/accountants approve the schedule.
+
+Backups need encrypted database backups, object-version protection where appropriate, and tested restoration. A backup that has never been restored is not a demonstrated recovery capability.
+
+Matching, packing, and DAA design
+8.1 Why free CBM is insufficient
+
+Two containers can each have 5 m³ unoccupied volume but accept completely different cargo.
+
+A load can fail because:
+
+• The package cannot pass through the door.
+• Empty space is fragmented.
+• The remaining floor space is unsuitable.
+• Existing cargo cannot support the load.
+• Weight or load-distribution constraints would be exceeded.
+• The intended unloading order becomes impossible.
+
+The optimizer cannot infer exact geometry from total remaining CBM.
+
+Use three evidence levels:
+
+| Level | Available data | Permitted outcome |
+|---|---|---|
+| Declared | Remaining volume and mass only | Conditional quote or manual acceptance |
+| Structured | Package dimensions and occupancy approximation | Conservative feasibility estimate |
+| Measured | Trusted placement/occupancy and handling constraints | Detailed packing evaluation, still subject to operational checks |
+
+8.2 Matching pipeline
+Filter to approved providers and supported cargo types.
+Match destination corridor and service scope.
+Check readiness, pickup feasibility, and cutoffs.
+Exclude stale or suspended inventory.
+Apply volume and mass bounds.
+Apply compatibility and handling constraints.
+Evaluate geometry where sufficient evidence exists.
+Rank feasible options.
+Revalidate at checkout under database concurrency control.
+
+A ranking function may be:
+
+$$
+Sj =
+wp \widehat{Pj}
+• wt \widehat{Tj}
+• wd \widehat{Dj}
+• wu \widehat{Uj}
+• wr \widehat{Rj}
+$$
+
+Here, the normalized terms represent price, time, pickup distance, uncertainty, and operational risk. Lower is preferable.
+
+Hard safety and compatibility constraints are filters, not score penalties. A low price must never compensate for prohibited cargo.
+
+8.3 Packing strategy
+
+Begin with an extreme-point or maximal-empty-space heuristic:
+
+• Sort packages by a declared rule, such as descending volume.
+• Enumerate permitted orientations.
+• Generate candidate placement points.
+• Reject overlap, boundary, support, and payload violations.
+• Score feasible placements.
+• Use bounded search or local improvement where required.
+
+For small instances, a constraint-programming or mathematical-programming model can provide comparison solutions. Do not promise exact optimal packing at large scale.
+
+Existing physical cargo may be fixed in place. Distinguish “repacking permitted” from “existing placements immutable.”
+
+8.4 Concurrency and geometry
+
+Scalar capacity counters alone cannot prevent two bookings from claiming the same geometric space.
+
+Use:
+
+Read inventory and packing-plan version.
+Compute candidate placement outside the database lock.
+Begin transaction and lock the relevant pool.
+Verify the inventory and plan versions have not changed.
+Commit both the resource hold and placement reservation.
+Retry or downgrade to manual review if versions changed.
+
+This keeps expensive optimization outside long-held transactions while preserving correctness at commit time.
+
+8.5 Checkout hold policy
+
+A 10-minute hold is a configurable product starting point, not a legal or industry requirement.
+
+The expiry worker should not be the only enforcement mechanism. Every booking decision must evaluate expiresat using authoritative server/database time, so a delayed worker cannot leave expired reservations effectively active.
+
+External double-selling remains possible when an LSP also sells through phone calls or other systems. Address it through inventory integration, conservative buffers, provider obligations, and warehouse confirmation.
+
+Trust, identities, cargo, money, and documents
+9.1 Provider trust model
+
+Approval should cover:
+
+• Legal organization and authorized representative.
+• Facilities and operational access.
+• Ability to offer the listed services.
+• Safety and handling procedures.
+• Accuracy of sample schedules and capacity.
+• Claims and incident handling.
+• Contractual rights to sell the offered capacity.
+
+An internal data-quality score can assess completeness, timeliness, and observed discrepancies. It should not substitute for inspection or become an unexplained public “safety score.”
+
+Triggers for reinspection include expired evidence, facility changes, serious complaints, repeated capacity discrepancies, or a material service-scope change.
+
+9.2 Indian identity verification
+
+| Identity/document | Purpose | Implementation boundary |
+|---|---|---|
+| IEC | Import/export business identity where applicable | Capture and verify through an authorized workflow; open free production API not established |
+| GSTIN | Tax registration identity | Syntax validation is not registration verification |
+| CIN | Company registration reference where applicable | Not every trader is a company |
+| Aadhaar | Sensitive individual identity | Do not make it the default business onboarding requirement |
+| DigiLocker | Consented document retrieval | Partner approval and permitted document access must be confirmed |
+| AD code | Banking/customs-related operational reference | Shipment/port process dependent; not a universal login credential |
+
+Do not scrape restricted portals, purchase questionable identity datasets, or claim Aadhaar eKYC without authorization. Manual evidence review is acceptable for a controlled pilot if its limitations are disclosed.
+
+9.3 Cargo admission
+
+For the MVP, explicitly reject unsupported dangerous goods, perishables, reefer cargo, prohibited items, and regulated categories.
+
+Before expanding:
+
+• Obtain mode-specific dangerous-goods expertise.
+• Implement classification, packaging, documentation, and segregation rules.
+• Confirm equipment and facility capability.
+• Define incident handling.
+• Contract for responsibility and liability.
+• Distinguish insurance coverage from a provider's limited contractual liability.
+
+A checkbox saying “not dangerous” is useful disclosure, but not a complete dangerous-goods compliance system.
+
+9.4 Money flow
+
+A database capacity hold is not a card authorization hold, and neither is escrow.
+
+Recommended flow:
+
+Trader accepts a versioned quote.
+Platform reserves capacity.
+Trader pays through a hosted gateway checkout.
+Backend verifies payment events and reconciles exceptions.
+Provider settlement follows the contracted, gateway-approved model.
+Refunds and disputes are independently tracked.
+
+Use a licensed payment partner's permitted marketplace/split-settlement product, subject to its approval. Do not receive customer funds in a personal or ordinary account and market that as escrow.
+
+Payment architecture, GST, invoicing, and liability require a qualified lawyer/accountant and the payment provider's review; this is a technical design, not licensed legal or financial advice.
+
+9.5 Cancellation and no-show policy
+
+Publish rules for:
+
+• Trader cancellation before cargo handover.
+• Cancellation after pickup or warehouse handling.
+• Missed cargo/document cutoff.
+• Provider cancellation.
+• Changed measured dimensions or weight.
+• Vessel/route changes.
+• Prohibited or misdeclared cargo.
+• Failed collection.
+• Refund processing and deductions.
+
+The policy accepted at booking must remain recoverable, even if the public policy later changes.
+
+9.6 Documents
+
+| Document | Platform behavior |
+|---|---|
+| Quote and booking confirmation | Generate from accepted commercial terms |
+| Packing list | Upload or structured generation with shipper validation |
+| Commercial invoice | Store the trader's document; do not invent customs values |
+| Shipping bill | Store official reference/document from the authorized process |
+| E-way bill | Store or integrate where applicable and authorized |
+| Bill of lading/AWB | Store issued document/reference and versions |
+| VGM declaration | Support authorized submission/evidence where applicable |
+| Tax invoice | Issue only for the platform's or provider's actual taxable supply |
+| Inspection report | Restricted evidence with reviewer and version history |
+
+A platform booking confirmation is not a bill of lading.
+
+Security and privacy
+10.1 Authentication and authorization
+
+Use an established OIDC-compatible identity provider or mature framework integration.
+
+• Require MFA for inspectors, admins, and privileged LSP staff.
+• Authorize by organization, resource ownership, assignment, and action.
+• Use short-lived, securely managed sessions.
+• Prefer secure, HttpOnly cookies for browser sessions.
+• Protect cookie-authenticated writes against CSRF.
+• Reauthenticate for sensitive payout-account changes.
+• Audit and notify organization owners of privilege changes.
+
+Never trust a client-submitted organization ID as proof of membership.
+
+10.2 Threat mapping
+
+This is a mapping to OWASP Top 10:2021 categories, not a claim that this is the latest edition.
+
+| Category | Project-specific control |
+|---|---|
+| Broken access control | Object-level and organization-level authorization |
+| Cryptographic failures | TLS, protected secrets, encryption at rest, minimized sensitive data |
+| Injection | Parameterized SQL and validated structured inputs |
+| Insecure design | Explicit inventory, payment, approval, and dispute state machines |
+| Security misconfiguration | Private buckets, restricted CORS, hardened production configuration |
+| Vulnerable/outdated components | Dependency scanning and supported-version policy |
+| Identification/authentication failures | MFA, rate limiting, secure sessions, recovery controls |
+| Software/data integrity failures | Signed payment events, controlled builds, trusted dependencies |
+| Logging/monitoring failures | Security events, alerts, audit review, correlation IDs |
+| SSRF | Restrict outbound fetches and reject arbitrary internal-network URLs |
+
+10.3 Payment security
+• Hosted/tokenized checkout; do not store PAN or CVV.
+• Verify signatures against the required raw event representation.
+• Check amount, currency, merchant context, and order association.
+• Deduplicate events.
+• Handle retries and out-of-order delivery.
+• Reconcile against the gateway.
+• Keep refunds and payouts separately authorized.
+• Redact payment payloads before logging.
+
+10.4 Document and chat security
+
+Upload controls should include:
+
+• Size limits and file-type allowlists.
+• Malware scanning.
+• Quarantine before access.
+• Random object keys.
+• Short-lived authorized downloads.
+• Content-disposition and safe preview handling.
+• Document hashes and version history.
+• Access logs for sensitive evidence.
+
+Chat should support abuse reports and restricted access. Do not claim end-to-end encryption unless it is genuinely implemented and its moderation implications are understood.
+
+10.5 DPDP-oriented design
+
+Build for purpose limitation, clear notices, appropriate consent/other permitted processing grounds, data minimization, security safeguards, grievance handling, and rights-request workflows.
+
+The search retrieved secondary analysis describing the DPDP Rules 2025 and phased commencement, but did not verify the controlling Gazette notifications and exact provision-by-provision effective dates. Do not treat the whole regime as either fully commenced or wholly deferred without a legal check. DPDP analysis
+
+Maintain:
+
+• A data inventory and processing-purpose register.
+• Processor/vendor contracts.
+• Retention and deletion schedules.
+• Incident-response procedures.
+• Export/correction/deletion request handling.
+• Location-sharing controls.
+• Access review and staff training.
+• A policy restricting business-account use to adults.
+
+India-region hosting may be operationally desirable, but do not equate DPDP compliance with a blanket India-only hosting rule.
+
+Free APIs and service choices
+
+A demonstration can use free software and some free quotas. A dependable commercial logistics platform should not be budgeted as permanently free.
+
+The search did not verify current official quota/pricing pages for the services below. Accordingly, numeric hosted-service limits are not asserted. This is an explicit research gap, not permission to assume unlimited usage.
+
+| Service area | Candidate | Free status and boundary |
+|---|---|---|
+| Map rendering | MapLibre GL JS | Open-source renderer; tiles, geocoding, routing, and hosting are separate |
+| Map data | OpenStreetMap | Open data with license obligations; public servers are not a production SLA |
+| Routing | Self-hosted OSRM/Valhalla or hosted provider | Self-hosting incurs compute and map-update costs; hosted quotas unverified |
+| Geocoding | Hosted provider or self-hosted Nominatim | Do not use public community infrastructure as an unrestricted commercial backend |
+| Database | PostgreSQL/PostGIS | No software license fee; managed quotas and backup costs vary |
+| Managed backend | Supabase | Current free database, storage, egress, pause, and realtime limits unverified |
+| Object storage | Cloudflare R2/S3-compatible provider | Current free storage/operation limits unverified |
+| Frontend hosting | Vercel/Cloudflare or equivalent | Verify commercial eligibility and quotas before selection |
+| Payment development | Gateway test mode | Simulated payments; no real settlements or live-production entitlement |
+| Live payments | Authorized gateway | Commercial fees, onboarding, reserves, and settlement conditions apply |
+| Realtime/chat | Socket.IO with your backend | No library usage fee; connections and traffic consume infrastructure |
+| Push | FCM/Web Push | Confirm current service terms; no substitute for guaranteed critical delivery |
+| SMS/WhatsApp | Approved provider | Do not assume free production delivery; registration and message rules apply |
+| GST/IEC verification | Authorized access or vendor | No unrestricted free production API established here |
+| DigiLocker/Aadhaar eKYC | Approved integration | Eligibility, consent, security, and permitted use require confirmation |
+| ULIP | Reviewed partner integration | Use-case approval and agreements apply |
+
+Before adopting a hosted service, record:
+
+| Required procurement field | Why it matters |
+|---|---|
+| Current official pricing URL and check date | Prevents stale assumptions |
+| Numeric request/storage/egress limits | Enables a realistic capacity budget |
+| Overage and suspension behavior | Prevents silent outages |
+| Commercial-use permission | A hobby tier may not suit the business |
+| Region and backup capabilities | Affects latency, privacy, and recovery |
+| Export/migration path | Reduces lock-in |
+
+Best zero-license-cost demo configuration: Run PostgreSQL/PostGIS, Redis, the API, optimizer, and web application locally through Docker Compose; use synthetic data and sandbox payments.
+
+UI, UX, accessibility, and theme
+12.1 Design direction
+
+Theme: practical, trustworthy, and legible. Logistics users need clear charges and deadlines more than decorative dashboards.
+
+| Token | Suggested value |
+|---|---|
+| Primary | Deep navy #12324A |
+| Secondary | Teal #087E8B |
+| Background | Light gray #F5F7FA |
+| Main text | Slate #172B4D |
+| Warning | Amber #A66300 |
+| Error | Red #B42318 |
+| Success | Green #157347 |
+
+Validate every foreground/background combination for contrast. Colors are design proposals, not pre-certified accessible combinations.
+
+Use Inter for Latin text and an appropriate Noto family for supported Indian scripts. Keep body text comfortable on low-cost phones and touch targets at least approximately 44 × 44 CSS pixels.
+
+12.2 Screens by role
+
+| Role | Essential screens |
+|---|---|
+| Trader | Registration, shipment wizard, search, quote comparison, checkout, booking timeline, chat, documents, disputes |
+| LSP | Application, facility details, inspection status, departure listing, inventory, acceptance desk, bookings, payouts |
+| Inspector | Assigned inspections, checklist, evidence capture, findings, reinspection history |
+| Admin | Approval queue, suspension controls, disputes, reconciliation, audit, service configuration |
+
+12.3 Trader booking flow
+Where is the cargo going?
+When will it be ready?
+What are its packages, dimensions, and weight?
+Compare compatible services and disclosed charges.
+Confirm the quote, declarations, and cancellation rules.
+Pay and follow the booking.
+
+Offer both “I know the package dimensions” and “I need measurement assistance.” The latter should produce a conditional or assisted quote, not a fake packing guarantee.
+
+12.4 Search-card content
+
+Every card should show:
+
+• Provider and approval scope.
+• Origin facility and destination service.
+• Planned departure.
+• Cargo and document cutoffs.
+• Price scope and conditional charges.
+• Available capacity basis.
+• Inventory age.
+• Whether acceptance is automatic, conditional, or manual.
+
+“Verified provider” must not imply that every shipment or promised departure is guaranteed.
+
+12.5 Capacity visualization
+
+Start with:
+
+• Separate volume and payload bars.
+• A 2D layout when geometry is known.
+• Door dimensions and largest accepted package.
+• Last measured/updated timestamp.
+• A textual feasibility explanation.
+
+Add interactive 3D later. It should be an explanatory view of known data, not a photorealistic substitute for warehouse measurement.
+
+12.6 Low-literacy and multilingual support
+• Human-review key logistics translations.
+• Pair icons with text labels.
+• Offer unit selectors and immediate CBM calculation.
+• Use examples for “stackable,” “ready date,” and “cutoff.”
+• Keep error messages specific and adjacent to the field.
+• Support assisted booking with clear staff attribution.
+• Preserve drafts on poor connections.
+• Use plain-language notifications with one clear next action.
+
+Voice entry is a stretch feature because dimension and address transcription errors need careful confirmation.
+
+Module priorities and implementation plan
+13.1 Feature classification
+
+| Core | Differentiator | Stretch |
+|---|---|---|
+| Trader registration | Inventory confidence/freshness | Milk-run optimization |
+| Inspected LSP onboarding | Explainable cargo compatibility | Full 3D interactive planner |
+| Departures and capacity | Conservative packing admission | Automated warehouse scanning |
+| Search and quotes | Measured-versus-declared comparison | ONDC participation |
+| Transactional holds | Multilingual assisted workflows | ULIP-enabled tracking |
+| Sandbox/live payment adapter | Provider discrepancy monitoring | Multi-leg dynamic rerouting |
+| Chat and milestones | Packing research dashboard | Specialized DG/reefer workflows |
+| Documents and audit | Transparent total-charge comparison | Native mobile applications |
+
+13.2 Repository structure
+
+`text
+cargospace/
+  apps/
+    web/
+    api/
+    worker/
+  services/
+    optimizer/
+  packages/
+    contracts/
+    ui/
+    config/
+  database/
+    migrations/
+    seeds/
+  infra/
+    compose/
+    deployment/
+  tests/
+    integration/
+    concurrency/
+    e2e/
+    security/
+    performance/
+  docs/
+    product/
+    srs/
+    architecture/
+    adr/
+    api/
+    operations/
+    research/
+`
+
+Share validation contracts and API types, not database internals with the browser.
+
+13.3 Initial setup
+
+These commands bootstrap the application directories; database, queue, and deployment configuration still need to be authored and reviewed.
+
+`bash
+mkdir cargospace
+cd cargospace
+git init
+
+mkdir -p apps services packages database infra tests docs
+
+corepack enable
+pnpm init
+
+pnpm dlx create-next-app@latest apps/web \
+  --typescript --eslint --app
+
+pnpm dlx @nestjs/cli@latest new apps/api \
+  --package-manager pnpm --skip-git
+
+python -m venv services/optimizer/.venv
+`
+
+Example workspace declaration:
+
+`yaml
+packages:
+  - "apps/"
+  - "packages/"
+`
+
+Record the resolved versions and commit lockfiles. Use a secret manager or deployment-managed secrets outside development; never commit credentials.
+
+13.4 Twelve-week plan
+
+| Week | Deliverable | Exit criterion |
+|---|---|---|
+| 1 | Interviews, corridor scope, domain model, wireframes | One coherent end-to-end operating scenario |
+| 2 | Auth, organizations, RBAC, migrations | Cross-organization access tests pass |
+| 3 | Applications, inspection, approval | Unapproved providers cannot list |
+| 4 | Facilities, departures, inventory | Versioned listing with cutoffs and freshness |
+| 5 | Cargo entry, filtering, quote engine | Comparable itemized quotes |
+| 6 | Holds and booking state machine | Concurrency tests pass |
+| 7 | Sandbox payment and reconciliation | Duplicate/late events handled |
+| 8 | Chat, documents, milestone tracking | Authorized end-to-end shipment workflow |
+| 9 | Basic packing service and baselines | Reproducible feasibility experiments |
+| 10 | Regional language, accessibility, offline drafts | User task tests completed |
+| 11 | Security, load tests, monitoring, restore test | Launch-blocking defects resolved |
+| 12 | Staging demonstration and pilot-readiness review | Evidence-backed go/no-go decision |
+
+If the team is one or two inexperienced developers, reduce scope or extend time. Remove 3D UI and external integrations before weakening payment, permissions, or inventory correctness.
+
+13.5 Build first for the demo
+
+The first complete vertical slice should be:
+
+Approved provider -> departure -> trader cargo -> compatible quote -> atomic hold -> sandbox payment -> booking confirmation.
+
+Then demonstrate the failure cases:
+
+• An unapproved provider cannot publish.
+• Cargo exceeding limits is rejected.
+• Two traders cannot consume the same remaining capacity.
+• Duplicate payment events do not create duplicate bookings.
+• A late payment enters a visible exception workflow.
+
+These prove more engineering value than a large static dashboard.
+
+Deployment, operations, and testing
+14.1 Deployment model
+
+Development: Docker Compose with synthetic fixtures.
+
+Staging: Separate database, storage, credentials, payment mode, and notification configuration.
+
+Pilot production: Managed PostgreSQL with recovery capability, private object storage, API and worker services, and a separately scalable optimization worker.
+
+Do not place long-running packing computations in a short-lived request runtime.
+
+14.2 CI/CD pipeline
+Lint and type-check.
+Run unit tests.
+Run database integration tests.
+Run authorization and payment-state tests.
+Scan dependencies and secrets.
+Build immutable artifacts.
+Test migrations against a production-like schema.
+Deploy staging.
+Run smoke tests.
+Require approval for production deployment.
+
+Use expand-and-contract migrations for incompatible schema changes. Application rollback does not automatically undo a destructive database migration.
+
+14.3 Monitoring
+
+Track business and technical health together:
+
+• Search and checkout latency.
+• Active/expired holds.
+• Payment events waiting for processing.
+• Reconciliation mismatches.
+• Confirmed capacity conflicts.
+• Listings older than their freshness threshold.
+• Notification failures.
+• Optimizer timeout/error rate.
+• Queue age.
+• Database capacity and backup status.
+
+Define an on-call escalation path before accepting real payments.
+
+14.4 Testing matrix
+
+| Test type | Essential cases |
+|---|---|
+| Unit | Pricing, dimensional conversions, deadlines, status transitions |
+| Property-based | Non-negative capacity, no overlapping placements, balanced ledger |
+| Concurrency | Many buyers for one constrained allocation |
+| Payment integration | Duplicates, bad signatures, retries, late success, partial refunds |
+| Authorization | Other organization's bookings, files, chat, and payouts remain inaccessible |
+| Upload security | Spoofed extensions, malicious content, oversized files |
+| Geospatial | Radius boundaries, incorrect coordinates, no matching corridor |
+| Offline | Duplicate events and delayed uploads |
+| Optimization | Oversized cargo, unsupported orientation, fixed occupied regions |
+| Accessibility | Keyboard, screen reader, focus, contrast, translated layouts |
+| Recovery | Restore database and documents and reconcile identifiers |
+| User acceptance | Trader, LSP operator, inspector, and finance tasks |
+
+14.5 Risk register
+
+| Risk | Mitigation |
+|---|---|
+| Stale provider capacity | Freshness expiry, imports, manual confirmation, discrepancy tracking |
+| External double-selling | Contractual controls, integration, conservative buffers |
+| False packing feasibility | Evidence levels, fixed-load constraints, warehouse acceptance |
+| Unavailable government APIs | Adapter design and explicit manual fallback |
+| Payment/settlement mismatch | Idempotent events, ledger, reconciliation, approved payment product |
+| Misdeclared cargo | Declarations, measurements, inspection and rejection policy |
+| Privacy leakage | Scoped access, protected documents, minimized telemetry |
+| Fake provider/listing | Inspection, service-right checks, controlled activation |
+| Cold-start marketplace | Secure supply before demand acquisition |
+| Overambitious research claims | Baselines, preregistered metrics, limitations, no fabricated results |
+| Free-tier suspension | Paid pilot budget, alerts, recovery and migration plan |
+
+14.6 Go-live gate
+
+Accept real cargo only after:
+
+• Contracted providers and actual inspection procedures exist.
+• Customer terms explain the platform's role and liability.
+• Payment collection, refunds, and payouts work in production.
+• Quotes disclose charges and adjustment rules.
+• Support and incident ownership are assigned.
+• Restore and reconciliation drills pass.
+• Unsupported cargo is blocked.
+• Provider cancellations and disputes have an operational process.
+• Privacy, tax, and commercial arrangements receive professional review.
+
+Awareness and go-to-market plan
+15.1 Start with supply
+
+Secure a small number of dependable consolidators before promoting the marketplace broadly.
+
+Choose one cluster and corridor using interviews, not assumptions. Potential interview locations include garment, engineering, leather, handicraft, and other export clusters, but the first corridor should follow actual provider access and demand.
+
+Supply onboarding needs:
+
+A named operations contact.
+A recurring service and cutoff schedule.
+Transparent quotation rules.
+A capacity update process.
+Warehouse acceptance procedures.
+Cancellation and dispute responsibilities.
+
+15.2 Demand acquisition
+
+Reach small exporters through:
+
+• Customs brokers and freight intermediaries: Referral and assisted-booking partnerships.
+• Export promotion councils and FIEO-related events: Training sessions and service demonstrations without implying endorsement.
+• MSME and local industry associations: Cluster-specific workshops.
+• CFS/ICD-adjacent networks: Practical onboarding near cargo handover points.
+• Regional-language educational content: CBM calculation, cutoff planning, and quote comparison.
+• Direct field outreach: Observe real booking behavior instead of relying only on online advertisements.
+
+Use WhatsApp or similar channels as consented communication channels, not unsolicited bulk-spam tools.
+
+15.3 Initial value proposition
+
+For exporters:
+
+> Compare suitable shared-freight options with clear charges, cargo acceptance conditions, and one booking record.
+
+For providers:
+
+> Receive better-structured cargo requests, reduce repeated data entry, and improve visibility of available consolidation capacity.
+
+Avoid promising “cheapest freight,” “guaranteed space,” or “zero empty containers” without evidence.
+
+15.4 Commercial measures
+
+Prioritize:
+
+• Search-to-compatible-quote rate.
+• Quote-to-booking rate.
+• Paid-to-accepted shipment rate.
+• Repeat bookings.
+• Provider-caused cancellation rate.
+• Time spent arranging one shipment.
+• Gross margin per completed booking.
+• Customer-support cost.
+• Document and capacity discrepancy rates.
+
+App installs and website traffic are not sufficient evidence of marketplace health.
+
+Documentation package
+
+Maintain these as versioned project artifacts.
+
+| Artifact | Required contents |
+|---|---|
+| Project report | Problem, domain study, scope, architecture, implementation, evaluation, limitations |
+| SRS | Actors, requirements, acceptance criteria, constraints, use cases |
+| Architecture decisions | Stack choices, rejected alternatives, transaction and deployment decisions |
+| API contract | Request/response schemas, authorization, idempotency, error states |
+| Data dictionary | Fields, units, constraints, ownership, retention |
+| Threat model | Assets, actors, trust boundaries, abuse cases, mitigations |
+| Provider operations manual | Application, inspection, listing, handover, incident workflows |
+| Trader guide | Cargo declaration, quote, payment, handover, tracking, disputes |
+| Finance runbook | Reconciliation, refund, payout, chargeback, exception handling |
+| Incident runbook | Detection, containment, communication, recovery, review |
+| Research protocol | Hypotheses, baselines, datasets, metrics, statistical analysis |
+| Test evidence | Executed tests, defects, fixes, performance and recovery results |
+| Release checklist | Dependencies, migrations, configuration, monitoring, rollback |
+
+Use requirement traceability:
+
+Requirement -> user story -> API/module -> test -> release evidence
+
+For example:
+
+FR-10 -> checkout hold -> booking module -> concurrent-hold test -> release report`
+
+IEEE Access-oriented paper draft
+
+This is a research manuscript draft, not a completed study. It deliberately contains no fabricated results, author affiliations, ethics approvals, or claims of acceptance. Current IEEE Access formatting and submission requirements must be verified before submission.
+
+Title
+
+Uncertainty-Aware Capacity Matching and Transactional Booking for Shared Freight Consolidation
+
+Abstract
+
+Digital freight platforms can improve access to shared transportation capacity, but advertised residual volume does not necessarily imply operationally feasible cargo acceptance. Booking decisions depend on routing, readiness deadlines, package geometry, payload, handling restrictions, and the freshness of provider-reported inventory. This paper proposes an architecture for shared freight consolidation that combines inspection-gated provider onboarding, constraint-aware matching, transactional capacity reservation, and auditable booking execution. The proposed admission process distinguishes declared inventory from structured and measured load information, applying conservative or manual acceptance when evidence is insufficient. A separate optimization service evaluates package placement where adequate geometric information is available, while a transactional booking service coordinates inventory holds and asynchronous payment events. The evaluation protocol compares volume-only, deterministic constraint-based, and uncertainty-aware approaches under changing inventory and concurrent demand. The intended contribution is a reproducible framework for studying reliable booking admission under partially observed freight capacity. Empirical performance and operational validity remain to be established through controlled experiments and a provider-supported pilot.
+
+Index terms: Freight consolidation, container loading, logistics platforms, uncertainty-aware matching, transactional reservation, geospatial search.
+
+I. Introduction
+
+Small consignments are commonly consolidated to share transport capacity. Digital discovery can reduce communication effort, but reliable booking requires more than exposing a provider's declared remaining volume. Physical fit, handling compatibility, readiness, facility deadlines, and inventory updates influence whether a consignment can actually be accepted.
+
+Existing container-loading research establishes the importance of practical constraints. However, packing feasibility and marketplace booking are often treated as separate concerns. A feasible plan may become obsolete before payment completes, while a successful payment does not prove that physical capacity remains available. RePEc
+
+This work proposes a system that connects constrained matching with evidence-aware admission and transactional reservations. The intended contributions are:
+
+A representation of freight capacity that includes operational deadlines and data confidence.
+An admission workflow distinguishing verified feasibility from conditional acceptance.
+A concurrency-safe architecture connecting packing-plan versions, capacity holds, and payment events.
+An evaluation protocol covering feasibility errors, utilization, latency, and inventory staleness.
+
+II. Related Work
+
+Container-loading research studies arrangement strategies and operational constraints. Bortfeldt and Wäscher provide a review of such constraints, while tree-search and genetic approaches supply algorithmic baselines for packing experiments. RePEc
+
+Dynamic matching literature provides adjacent methods for time-sensitive assignment, but shipment matching additionally requires cargo compatibility and physical loading considerations. Marketplace reputation research motivates historical reliability measures; these measures should complement, rather than replace, provider inspection and direct evidence.
+
+Indian logistics infrastructure also motivates an adapter-based integration design. Published ULIP onboarding procedures require reviewed access, agreements, and security checks, indicating that external logistics data cannot be assumed to be universally available. PIB
+
+A final submission must expand this section with a systematically screened set of directly relevant freight-matching and online-loading studies.
+
+III. Problem Formulation
+
+Let the set of shipments be $$I$$ and the set of available consolidation departures be $$J$$. Each shipment has package geometry, mass, origin, destination, readiness, and handling requirements. Each departure has capacity, cutoffs, service compatibility, inventory age, and a known or partially known loading configuration.
+
+Define binary assignment variable $$x{ij}$$ to indicate whether shipment $$i$$ is allocated to departure $$j$$.
+
+A representative objective is:
+
+$$
+\min
+\sum{i \in I}
+\sum{j \in J}
+x{ij}
+\left(
+\alpha C{ij}
+• \beta T{ij}
+• \gamma U{ij}
+\right)
+• \lambda
+\sum{i \in I} yi
+$$
+
+Here, cost, timing, and uncertainty penalties are balanced against an unassigned-shipment penalty.
+
+$$
+\sum{j \in J} x{ij} + y_i = 1
+\qquad \forall i \in I
+$$
+
+Assignments must satisfy route compatibility, time windows, supported cargo types, capacity limits, and applicable loading constraints.
+
+Aggregate volume and mass inequalities are necessary screening conditions, not sufficient packing conditions. Detailed geometry requires non-overlap, boundary, orientation, and support constraints.
+
+The method should not describe an uncertainty score as a calibrated probability unless calibration is actually measured.
+
+IV. Proposed Method
+
+The proposed pipeline first filters departures using service compatibility and operational deadlines. It then applies aggregate capacity checks and invokes geometric evaluation where data quality permits.
+
+Inventory is classified by evidence level. Declared-only inventory can produce conditional recommendations, while sufficiently measured inventory supports detailed feasibility analysis. The final admission decision is committed only after verifying the current inventory and packing-plan versions.
+
+A capacity hold reserves the selected resources for a bounded interval. Payment processing uses verified asynchronous events and idempotent financial records. Expired holds and delayed payment success are handled as explicit exceptions rather than unconditional confirmation.
+
+V. System Implementation
+
+The proposed implementation uses a TypeScript business API, PostgreSQL/PostGIS for transactional and geographic data, and a Python optimization service. Background workers process outbox events, notifications, reconciliation, and inventory imports. Private object storage contains operational documents and inspection evidence.
+
+Role-based and organization-scoped authorization separates traders, providers, inspectors, and administrators. Provider approval is scoped to inspected services and facilities. Shipment events retain both event time and receipt time to support delayed updates.
+
+VI. Experimental Design
+
+Evaluate four configurations:
+
+• Volume-only screening.
+• Volume, payload, route, and time screening.
+• Deterministic geometric packing.
+• Constraint-aware matching with uncertainty-aware admission.
+
+Generate datasets varying package dimensions, occupancy fragmentation, cargo mix, cutoff proximity, stale inventory, and concurrent bookings. Document seeds, distributions, hardware, time limits, and solver versions.
+
+For small instances, compare feasibility against an exact or independently validated method where practical. For operational claims, obtain measured warehouse data or supervised pilot outcomes.
+
+Report feasibility precision and recall, utilization, latency, booking conflicts, review workload, and sensitivity to uncertainty parameters. Use repeated trials and uncertainty intervals appropriate to the experimental design.
+
+VII. Results
+
+Results are pending implementation and evaluation.
+
+The final manuscript should present measured comparisons, ablations, failure cases, and computational costs. It should not infer reduced logistics costs or emissions from improved simulated packing alone.
+
+VIII. Limitations and Threats to Validity
+
+Synthetic package distributions may not represent actual cargo. Provider reporting behavior can differ from simulated staleness. Loading success depends on factors that software may not fully observe, including packaging strength, handling practices, and measurement errors.
+
+Manual acceptance introduces operator variability. Historical provider reliability may disadvantage new providers if used without safeguards. A single-corridor pilot limits generalizability across modes, commodities, and regions.
+
+IX. Conclusion
+
+The proposed system treats shared-freight booking as a combination of operational matching, physical feasibility, evidence quality, and transactional consistency. Its research value depends on demonstrating that uncertainty-aware admission improves meaningful outcomes beyond deterministic constraints alone. The architecture provides a basis for implementation and controlled evaluation, but commercial effectiveness and empirical improvements remain unproven.
+
+Final recommendation
+
+Build the reliable booking platform first; make the optimizer a measurable research module, not a marketing claim.
+
+The strongest project submission will demonstrate:
+
+A genuine inspection-to-approval workflow.
+Cargo-aware, cutoff-aware search.
+Correct inventory holds under concurrency.
+Safe payment and refund exception handling.
+Clear limits when geometric data is incomplete.
+A reproducible experiment against honest baselines.
+A narrow pilot supported by real logistics operators.
+
+The main unresolved diligence items are current provider/API quotas, authorized identity-verification access, applicable legal commencement dates, a verified competitor feature audit, and actual corridor economics. Resolve those before committing to production providers or claiming market readiness.
